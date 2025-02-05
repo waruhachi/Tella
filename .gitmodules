@@ -1,6 +1,0 @@
-[submodule "src/vender/SatellaJailed"]
-	path = src/vender/SatellaJailed
-	url = https://github.com/Paisseon/SatellaJailed.git
-[submodule "src/vender/Azule"]
-	path = src/vender/Azule
-	url = https://github.com/Al4ise/Azule
