@@ -45,7 +45,7 @@ export async function POST(request: NextRequest) {
 		);
 
 		const { stderr, stdout } = await execAsync(
-			`${scriptPath} -i "${filePath}" -n "${patchDir}" -v`
+			`${scriptPath} -i "${filePath}" -n "${patchDir}"`
 		);
 
 		if (stdout) console.log(stdout);
