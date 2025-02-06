@@ -16,107 +16,127 @@ import {
 	AlertDialogAction,
 } from '@/components/ui/alert-dialog';
 
+const CHUNK_SIZE = 1024 * 1024 * 4;
+
 export default function FileUploader() {
+	const [fileID, setFileID] = useState<string | null>(null);
 	const [selectedFile, setSelectedFile] = useState<File | null>(null);
-	const [isDialogOpen, setIsDialogOpen] = useState(false);
 	const [isUploading, setIsUploading] = useState(false);
-	const [dialogConfig, setDialogConfig] = useState({
-		title: '',
-		description: '',
-		fileName: '',
-		fileSize: '',
-		fileBlob: null as Blob | null,
-	});
+	const [dialogConfig, setDialogConfig] = useState<{
+		title: string;
+		description: string;
+		fileName?: string;
+		fileSize?: string;
+		fileBlob?: Blob | null;
+	}>({ title: '', description: '' });
+	const [isDialogOpen, setIsDialogOpen] = useState(false);
 
 	const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
 		const file = event.target.files?.[0];
 		if (file) {
 			setSelectedFile(file);
+			setFileID(crypto.randomUUID());
 		}
 	};
 
+	const handleApiCall = async (
+		url: string,
+		method: string,
+		body?: BodyInit | null,
+		headers: HeadersInit = { 'Content-Type': 'application/json' }
+	) => {
+		const response = await fetch(url, { method, body, headers });
+		const data = await response.json();
+
+		if (!response.ok) {
+			throw new Error(data.details || data.error || 'Unknown error');
+		}
+
+		return data;
+	};
+
 	const handleFileUpload = async () => {
-		if (!selectedFile || isUploading) return; // Prevent multiple clicks
+		if (!selectedFile || !fileID || isUploading) return;
 
-		setIsUploading(true); // Start loading
-
-		const formData = new FormData();
-		formData.append('file', selectedFile);
+		setIsUploading(true);
+		const totalChunks = Math.ceil(selectedFile.size / CHUNK_SIZE);
 
 		try {
-			const response = await fetch('/upload', {
-				method: 'POST',
-				body: formData,
-			});
-
-			if (response.ok) {
-				// Get the blob from response
-				const blob = await response.blob();
-
-				// Get filename from Content-Disposition header
-				const contentDisposition = response.headers.get(
-					'Content-Disposition'
+			for (let i = 0; i < totalChunks; i++) {
+				const chunk = selectedFile.slice(
+					i * CHUNK_SIZE,
+					(i + 1) * CHUNK_SIZE
 				);
-				const fileNameMatch =
-					contentDisposition?.match(/filename="?(.+)"?/);
-				const fileName = fileNameMatch
-					? fileNameMatch[1]
-					: 'patched.ipa';
+				const chunkBuffer = await chunk.arrayBuffer();
+				const chunkBase64 = Buffer.from(chunkBuffer).toString('base64');
 
-				// Show success dialog with file details
-				setDialogConfig({
-					title: 'Patch Successful',
-					description: 'Your file has been patched successfully.',
-					fileName,
-					fileSize: `${(blob.size / 1024 / 1024).toFixed(2)} MB`,
-					fileBlob: blob,
-				});
-				setIsDialogOpen(true);
-			} else {
-				const errorData = await response.json();
-				setDialogConfig({
-					title: 'Error',
-					description: `Upload failed: ${errorData.error}`,
-					fileName: '',
-					fileSize: '',
-					fileBlob: null,
-				});
-				setIsDialogOpen(true);
+				await handleApiCall(
+					'/chunk',
+					'POST',
+					JSON.stringify({
+						fileID,
+						chunkIndex: i,
+						totalChunks,
+						chunkData: chunkBase64,
+					})
+				);
 			}
+
+			const mergeResponse = await handleApiCall(
+				'/merge',
+				'POST',
+				JSON.stringify({ fileID, fileName: selectedFile.name })
+			);
+
+			if (!mergeResponse.filePath) {
+				throw new Error('Merge response did not include file path');
+			}
+
+			const patchResponse = await handleApiCall(
+				'/patch',
+				'POST',
+				JSON.stringify({ filePath: mergeResponse.filePath })
+			);
+
+			const blob = await fetch(patchResponse.filePath).then((res) =>
+				res.blob()
+			);
+			const fileName = patchResponse.fileName || 'patched.ipa';
+
+			setDialogConfig({
+				title: 'Patch Successful',
+				description: 'Your file has been patched successfully.',
+				fileName,
+				fileSize: `${(blob.size / 1024 / 1024).toFixed(2)} MB`,
+				fileBlob: blob,
+			});
+			setIsDialogOpen(true);
 		} catch (error) {
-			console.error('Upload error:', error);
 			setDialogConfig({
 				title: 'Error',
-				description: 'Upload failed',
-				fileName: '',
-				fileSize: '',
-				fileBlob: null,
+				description:
+					error instanceof Error ? error.message : 'Upload failed',
 			});
 			setIsDialogOpen(true);
 		} finally {
-			setIsUploading(false); // Stop loading
+			setIsUploading(false);
 		}
 	};
 
 	const handleDownload = () => {
-		if (dialogConfig.fileBlob) {
-			// Create a URL for the blob
-			const url = window.URL.createObjectURL(dialogConfig.fileBlob);
+		if (dialogConfig.fileBlob && dialogConfig.fileName) {
+			const url = URL.createObjectURL(dialogConfig.fileBlob);
 
-			// Create a temporary anchor element
 			const a = document.createElement('a');
 			a.href = url;
 			a.download = dialogConfig.fileName;
 
-			// Trigger the download
 			document.body.appendChild(a);
 			a.click();
 
-			// Cleanup
-			window.URL.revokeObjectURL(url);
+			URL.revokeObjectURL(url);
 			document.body.removeChild(a);
 
-			// Reset state
 			setSelectedFile(null);
 			setIsDialogOpen(false);
 		}
@@ -150,7 +170,7 @@ export default function FileUploader() {
 
 						<Button
 							onClick={handleFileUpload}
-							disabled={!selectedFile || isUploading} // Disable during upload
+							disabled={!selectedFile || isUploading}
 							className='w-full text-xl py-4'
 						>
 							{isUploading ? (
@@ -199,7 +219,7 @@ export default function FileUploader() {
 								setIsDialogOpen(false);
 							}}
 						>
-							Discard
+							Cancel
 						</AlertDialogCancel>
 						{dialogConfig.fileBlob && (
 							<AlertDialogAction onClick={handleDownload}>
