@@ -95,7 +95,7 @@ fi
 
 # Inject SatellaJailed to the app using Azule
 
-"$PWD/src/vender/Azule/azule" -n "$output" -i "$ipa" -o "$directory" -f "$PWD/src/vender/SatellaJailed/SatellaJailed.dylib" -muvwz | sed -u -r "s/(\[\*\])/$(echo $info)/g"
+"$PWD/src/vendor/Azule/azule" -n "$output" -i "$ipa" -o "$directory" -f "$PWD/src/vendor/SatellaJailed/SatellaJailed.dylib" -muvwz | sed -u -r "s/(\[\*\])/$(echo $info)/g"
 
 # Transfer to device if the -x flag is enabled
 
