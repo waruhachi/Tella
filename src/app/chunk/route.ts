@@ -7,28 +7,33 @@ const CHUNKS_DIR = path.join(process.cwd(), 'public', 'chunks');
 export async function POST(request: NextRequest) {
 	try {
 		const contentType = request.headers.get('content-type') || '';
-		if (!contentType.includes('application/json')) {
+		if (!contentType.includes('multipart/form-data')) {
 			return NextResponse.json(
 				{ error: 'Invalid Content-Type' },
 				{ status: 400 }
 			);
 		}
 
-		const { fileID, chunkIndex, totalChunks, chunkData } =
-			await request.json();
+		const formData = await request.formData();
+		const file = formData.get('file') as Blob | null;
+		const fileID = formData.get('fileID') as string | null;
+		const chunkIndex = formData.get('chunkIndex') as string | null;
+		const totalChunks = formData.get('totalChunks') as string | null;
 
-		if (!fileID || chunkIndex === undefined || !totalChunks || !chunkData) {
+		if (!file || !fileID || chunkIndex === null || !totalChunks) {
 			return NextResponse.json(
 				{ error: 'Missing parameters' },
 				{ status: 400 }
 			);
 		}
 
+		const chunkIndexNum = parseInt(chunkIndex, 10);
+
 		const fileDir = path.join(CHUNKS_DIR, fileID);
 		await fs.mkdir(fileDir, { recursive: true });
 
-		const chunkPath = path.join(fileDir, `${chunkIndex}.part`);
-		await fs.writeFile(chunkPath, Buffer.from(chunkData, 'base64'));
+		const chunkPath = path.join(fileDir, `${chunkIndexNum}.part`);
+		await fs.writeFile(chunkPath, Buffer.from(await file.arrayBuffer()));
 
 		return NextResponse.json({ success: true }, { status: 200 });
 	} catch (error) {

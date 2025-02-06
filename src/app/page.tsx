@@ -17,7 +17,7 @@ import {
 	AlertDialogAction,
 } from '@/components/ui/alert-dialog';
 
-const CHUNK_SIZE = 1024 * 1024 * 4;
+const CHUNK_SIZE = 1024 * 1024 * 2;
 
 export default function FileUploader() {
 	const { toast } = useToast();
@@ -57,9 +57,18 @@ export default function FileUploader() {
 		url: string,
 		method: string,
 		body?: BodyInit | null,
-		headers: HeadersInit = { 'Content-Type': 'application/json' }
+		headers: HeadersInit = {}
 	) => {
-		const response = await fetch(url, { method, body, headers });
+		const isFormData = body instanceof FormData;
+		const finalHeaders = isFormData
+			? headers
+			: { 'Content-Type': 'application/json', ...headers };
+
+		const response = await fetch(url, {
+			method,
+			body,
+			headers: finalHeaders,
+		});
 		const data = await response.json();
 
 		if (!response.ok) {
@@ -99,6 +108,8 @@ export default function FileUploader() {
 				return;
 			}
 
+			const currentFileID = fileID ?? crypto.randomUUID();
+			setFileID(currentFileID);
 			const totalChunks = Math.ceil(selectedFile.size / CHUNK_SIZE);
 
 			for (let i = 0; i < totalChunks; i++) {
@@ -106,19 +117,14 @@ export default function FileUploader() {
 					i * CHUNK_SIZE,
 					(i + 1) * CHUNK_SIZE
 				);
-				const chunkBuffer = await chunk.arrayBuffer();
-				const chunkBase64 = Buffer.from(chunkBuffer).toString('base64');
 
-				await handleAPI(
-					'/chunk',
-					'POST',
-					JSON.stringify({
-						fileID,
-						chunkIndex: i,
-						totalChunks,
-						chunkData: chunkBase64,
-					})
-				);
+				const formData = new FormData();
+				formData.append('file', chunk);
+				formData.append('fileID', currentFileID);
+				formData.append('chunkIndex', i.toString());
+				formData.append('totalChunks', totalChunks.toString());
+
+				await handleAPI('/chunk', 'POST', formData);
 			}
 
 			const mergeResponse = await handleAPI(
