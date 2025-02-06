@@ -44,10 +44,11 @@ export async function POST(request: NextRequest) {
 			'patch-linux.sh'
 		);
 
-		const { stderr } = await execAsync(
+		const { stderr, stdout } = await execAsync(
 			`${scriptPath} -i "${filePath}" -n "${patchDir}"`
 		);
 
+		if (stdout) console.log(stdout);
 		if (stderr) console.error(stderr);
 
 		try {
