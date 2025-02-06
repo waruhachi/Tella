@@ -122,10 +122,6 @@ export default function FileUploader() {
 		}
 	};
 
-	const clearFile = () => {
-		setSelectedFile(null);
-	};
-
 	return (
 		<>
 			<div className='flex items-center justify-center min-h-screen'>

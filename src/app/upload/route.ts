@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
 			'patch-linux.sh'
 		);
 
-		const { stderr, stdout } = await execAsync(
+		const { stderr } = await execAsync(
 			`${scriptPath} -i "${filePath}" -n "${patchDir}"`
 		);
 
