@@ -1,6 +1,6 @@
 'use client';
 
-import crypto from 'node:crypto';
+import { v4 as uuidv4 } from 'uuid';
 import { useState } from 'react';
 import { Upload, Download } from 'lucide-react';
 
@@ -41,7 +41,7 @@ export default function FileUploader() {
 		if (file) {
 			event.target.value = '';
 			setSelectedFile(file);
-			setFileID(crypto.randomUUID());
+			setFileID(uuidv4());
 			setIsUploading(false);
 			setDialogConfig({
 				title: '',
@@ -109,7 +109,7 @@ export default function FileUploader() {
 				return;
 			}
 
-			const currentFileID = fileID ?? crypto.randomUUID();
+			const currentFileID = fileID ?? uuidv4();
 			setFileID(currentFileID);
 			const totalChunks = Math.ceil(selectedFile.size / CHUNK_SIZE);
 
