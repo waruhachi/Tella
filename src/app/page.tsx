@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Upload, Download } from 'lucide-react';
 
+import { useToast } from '@/hooks/use-toast';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import {
@@ -19,9 +20,12 @@ import {
 const CHUNK_SIZE = 1024 * 1024 * 4;
 
 export default function FileUploader() {
+	const { toast } = useToast();
+
+	const [isUploading, setIsUploading] = useState(false);
+	const [isDialogOpen, setIsDialogOpen] = useState(false);
 	const [fileID, setFileID] = useState<string | null>(null);
 	const [selectedFile, setSelectedFile] = useState<File | null>(null);
-	const [isUploading, setIsUploading] = useState(false);
 	const [dialogConfig, setDialogConfig] = useState<{
 		title: string;
 		description: string;
@@ -29,17 +33,27 @@ export default function FileUploader() {
 		fileSize?: string;
 		fileBlob?: Blob | null;
 	}>({ title: '', description: '' });
-	const [isDialogOpen, setIsDialogOpen] = useState(false);
 
 	const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
 		const file = event.target.files?.[0];
+
 		if (file) {
+			event.target.value = '';
 			setSelectedFile(file);
 			setFileID(crypto.randomUUID());
+			setIsUploading(false);
+			setDialogConfig({
+				title: '',
+				description: '',
+				fileName: '',
+				fileSize: '',
+				fileBlob: null,
+			});
+			setIsDialogOpen(false);
 		}
 	};
 
-	const handleApiCall = async (
+	const handleAPI = async (
 		url: string,
 		method: string,
 		body?: BodyInit | null,
@@ -56,12 +70,37 @@ export default function FileUploader() {
 	};
 
 	const handleFileUpload = async () => {
-		if (!selectedFile || !fileID || isUploading) return;
+		if (!selectedFile || isUploading) return;
 
 		setIsUploading(true);
-		const totalChunks = Math.ceil(selectedFile.size / CHUNK_SIZE);
 
 		try {
+			const checkResponse = await handleAPI(
+				'/check',
+				'POST',
+				JSON.stringify({ fileName: selectedFile.name })
+			);
+
+			if (checkResponse.exists) {
+				const blob = await fetch(checkResponse.filePath).then((res) =>
+					res.blob()
+				);
+
+				setDialogConfig({
+					title: 'Patch Already Exists',
+					description:
+						'A patched version of this file already exists.',
+					fileName: selectedFile.name.replace('.ipa', '_Patched.ipa'),
+					fileSize: `${(blob.size / 1024 / 1024).toFixed(2)} MB`,
+					fileBlob: blob,
+				});
+				setIsDialogOpen(true);
+				setIsUploading(false);
+				return;
+			}
+
+			const totalChunks = Math.ceil(selectedFile.size / CHUNK_SIZE);
+
 			for (let i = 0; i < totalChunks; i++) {
 				const chunk = selectedFile.slice(
 					i * CHUNK_SIZE,
@@ -70,7 +109,7 @@ export default function FileUploader() {
 				const chunkBuffer = await chunk.arrayBuffer();
 				const chunkBase64 = Buffer.from(chunkBuffer).toString('base64');
 
-				await handleApiCall(
+				await handleAPI(
 					'/chunk',
 					'POST',
 					JSON.stringify({
@@ -82,7 +121,7 @@ export default function FileUploader() {
 				);
 			}
 
-			const mergeResponse = await handleApiCall(
+			const mergeResponse = await handleAPI(
 				'/merge',
 				'POST',
 				JSON.stringify({ fileID, fileName: selectedFile.name })
@@ -92,7 +131,7 @@ export default function FileUploader() {
 				throw new Error('Merge response did not include file path');
 			}
 
-			const patchResponse = await handleApiCall(
+			const patchResponse = await handleAPI(
 				'/patch',
 				'POST',
 				JSON.stringify({ filePath: mergeResponse.filePath })
@@ -101,12 +140,11 @@ export default function FileUploader() {
 			const blob = await fetch(patchResponse.filePath).then((res) =>
 				res.blob()
 			);
-			const fileName = patchResponse.fileName || 'patched.ipa';
 
 			setDialogConfig({
 				title: 'Patch Successful',
 				description: 'Your file has been patched successfully.',
-				fileName,
+				fileName: patchResponse.fileName,
 				fileSize: `${(blob.size / 1024 / 1024).toFixed(2)} MB`,
 				fileBlob: blob,
 			});
@@ -120,10 +158,12 @@ export default function FileUploader() {
 			setIsDialogOpen(true);
 		} finally {
 			setIsUploading(false);
+			setSelectedFile(null);
+			setFileID(null);
 		}
 	};
 
-	const handleDownload = () => {
+	const handleDownload = async () => {
 		if (dialogConfig.fileBlob && dialogConfig.fileName) {
 			const url = URL.createObjectURL(dialogConfig.fileBlob);
 
@@ -139,6 +179,30 @@ export default function FileUploader() {
 
 			setSelectedFile(null);
 			setIsDialogOpen(false);
+
+			toast({
+				title: 'IPA Downloading',
+				description: 'IPA will be deleted in 2 minutes',
+			});
+
+			setTimeout(async () => {
+				const cleanupResponse = await fetch('/clean', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({
+						fileName: dialogConfig.fileName,
+					}),
+				});
+
+				if (cleanupResponse.ok) {
+					toast({ title: 'Cleanup Successful' });
+				} else {
+					toast({
+						variant: 'destructive',
+						title: 'Cleanup failed',
+					});
+				}
+			}, 120000);
 		}
 	};
 

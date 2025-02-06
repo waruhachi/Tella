@@ -80,15 +80,6 @@ export async function POST(request: NextRequest) {
 			},
 			{ status: 500 }
 		);
-	} finally {
-		try {
-			if (patchedFilePath) {
-				// await fs.unlink(filePath);
-				// await fs.unlink(patchedFilePath);
-			}
-		} catch (cleanupError) {
-			console.error(`Error cleaning up ${filePath}:`, cleanupError);
-		}
 	}
 }
 
