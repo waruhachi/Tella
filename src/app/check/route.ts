@@ -21,7 +21,6 @@ export async function POST(request: NextRequest) {
 			'patched',
 			fileName
 		);
-		console.log('Checking if file exists:', patchedFilePath);
 
 		try {
 			await fs.access(patchedFilePath);
