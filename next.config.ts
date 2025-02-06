@@ -1,6 +1,8 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
+	output: 'export',
+	basePath: '/Tella',
 	experimental: {
 		serverActions: {
 			bodySizeLimit: '1GB',
