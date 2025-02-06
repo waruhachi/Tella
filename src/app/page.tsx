@@ -1,5 +1,6 @@
 'use client';
 
+import crypto from 'node:crypto';
 import { useState } from 'react';
 import { Upload, Download } from 'lucide-react';
 
