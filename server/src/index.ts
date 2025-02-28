@@ -18,25 +18,26 @@ const UPLOAD_DIR = path.join(TEMP_DIR, 'uploaded');
 
 const execAsync = promisify(exec);
 
-/* Status route */
-app.get('/status', (context) => {
+/* Base route */
+app.get('/', (context) => {
 	return context.body('API is running!');
 });
 
 /* Check route */
-app.post(
-	'/check',
-	validator('json', (value, context) => {
-		const fileName = value['fileName'];
+app.get(
+	'/check/:fileName',
+	validator('param', (value, context) => {
+		const fileName = decodeURIComponent(value['fileName']);
 
 		if (!fileName || typeof fileName !== 'string') {
 			return context.text('Invalid!', 400);
 		}
+
 		return { fileName };
 	}),
 	async (context) => {
 		try {
-			const { fileName } = context.req.valid('json');
+			const { fileName } = context.req.valid('param');
 			const uploadedFile = path.join(UPLOAD_DIR, fileName);
 			const patchedFile = path.join(
 				PATCH_DIR,
@@ -64,7 +65,7 @@ app.post(
 
 			return context.json({
 				exists: fileFound,
-				filePath,
+				filePath: fileFound ? filePath : null,
 			});
 		} catch (error) {
 			console.error('Check file error:', error);
@@ -130,58 +131,6 @@ app.post(
 			return context.json(
 				{
 					error: 'Chunk failed',
-					details:
-						error instanceof Error
-							? error.message
-							: 'Unknown error',
-				},
-				500
-			);
-		}
-	}
-);
-
-/* Clean route */
-app.post(
-	'/clean',
-	validator('json', (value, context) => {
-		const fileName = value['fileName'];
-
-		if (!fileName || typeof fileName !== 'string') {
-			return context.text('Invalid!', 400);
-		}
-		return { fileName };
-	}),
-	async (context) => {
-		try {
-			const { fileName } = context.req.valid('json');
-
-			const isPatched = fileName.includes('_Patched.ipa');
-			const uploadedFileName = isPatched
-				? fileName.replace('_Patched.ipa', '.ipa')
-				: fileName;
-			const patchedFileName = isPatched
-				? fileName
-				: fileName.replace('.ipa', '_Patched.ipa');
-
-			const uploadedPath = path.join(UPLOAD_DIR, uploadedFileName);
-			const patchedPath = path.join(PATCH_DIR, patchedFileName);
-
-			await fs.unlink(uploadedPath).catch((err) => {
-				if (err.code !== 'ENOENT')
-					console.warn(`Failed to delete ${uploadedPath}:`, err);
-			});
-			await fs.unlink(patchedPath).catch((err) => {
-				if (err.code !== 'ENOENT')
-					console.warn(`Failed to delete ${patchedPath}:`, err);
-			});
-
-			return context.json({ success: true, message: 'File cleaned up' });
-		} catch (error) {
-			console.error('Clean error:', error);
-			return context.json(
-				{
-					error: 'Clean failed',
 					details:
 						error instanceof Error
 							? error.message
@@ -357,6 +306,58 @@ app.post(
 			return context.json(
 				{
 					error: 'Patch failed',
+					details:
+						error instanceof Error
+							? error.message
+							: 'Unknown error',
+				},
+				500
+			);
+		}
+	}
+);
+
+/* Clean route */
+app.post(
+	'/clean',
+	validator('json', (value, context) => {
+		const fileName = value['fileName'];
+
+		if (!fileName || typeof fileName !== 'string') {
+			return context.text('Invalid!', 400);
+		}
+		return { fileName };
+	}),
+	async (context) => {
+		try {
+			const { fileName } = context.req.valid('json');
+
+			const isPatched = fileName.includes('_Patched.ipa');
+			const uploadedFileName = isPatched
+				? fileName.replace('_Patched.ipa', '.ipa')
+				: fileName;
+			const patchedFileName = isPatched
+				? fileName
+				: fileName.replace('.ipa', '_Patched.ipa');
+
+			const uploadedPath = path.join(UPLOAD_DIR, uploadedFileName);
+			const patchedPath = path.join(PATCH_DIR, patchedFileName);
+
+			await fs.unlink(uploadedPath).catch((err) => {
+				if (err.code !== 'ENOENT')
+					console.warn(`Failed to delete ${uploadedPath}:`, err);
+			});
+			await fs.unlink(patchedPath).catch((err) => {
+				if (err.code !== 'ENOENT')
+					console.warn(`Failed to delete ${patchedPath}:`, err);
+			});
+
+			return context.json({ success: true, message: 'File cleaned up' });
+		} catch (error) {
+			console.error('Clean error:', error);
+			return context.json(
+				{
+					error: 'Clean failed',
 					details:
 						error instanceof Error
 							? error.message
